@@ -36,29 +36,23 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-@app.route('/user', methods=['GET'])
-def handle_hello():
 
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
+# ENDPOINTS DE PEOPLE
 
-    return jsonify(response_body), 200
-
-#Endpoints characters
 @app.route('/people', methods=['GET'])
 def get_all_people():
-    characters = Character.query.all()
-    return jsonify([c.serialize() for c in characters]), 200
+    people = Character.query.all()
+    return jsonify([p.serialize() for p in people]), 200
 
 @app.route('/people/<int:people_id>', methods=['GET'])
 def get_one_person(people_id):
     person = Character.query.get(people_id)
-    if person is None:
-        return jsonify({"msg": "Character not found"}), 404
+    if not person:
+        return jsonify({"msg": "Personaje no encontrado"}), 404
     return jsonify(person.serialize()), 200
 
-#Endpoints planets 
+# ENDPOINTS DE PLANETS
+
 @app.route('/planets', methods=['GET'])
 def get_all_planets():
     planets = Planet.query.all()
@@ -67,11 +61,12 @@ def get_all_planets():
 @app.route('/planets/<int:planet_id>', methods=['GET'])
 def get_one_planet(planet_id):
     planet = Planet.query.get(planet_id)
-    if planet is None:
-        return jsonify({"msg": "Planet not found"}), 404
+    if not planet:
+        return jsonify({"msg": "Planeta no encontrado"}), 404
     return jsonify(planet.serialize()), 200
 
-#Endpoints users
+# ENDPOINTS DE USERS
+
 @app.route('/users', methods=['GET'])
 def get_all_users():
     users = User.query.all()
@@ -79,64 +74,69 @@ def get_all_users():
 
 @app.route('/users/favorites', methods=['GET'])
 def get_user_favorites():
-    # Simulamos el usuario 1 para prueba
-    user_id = 1 
-    
-    char_favs = FavoriteCharacter.query.filter_by(user_id=user_id).all()
-    plan_favs = FavoritePlanet.query.filter_by(user_id=user_id).all()
+    user = User.query.first()
+    if not user:
+        return jsonify({"msg": "No hay usuarios registrados."}), 404
+    char_favs = FavoriteCharacter.query.filter_by(user_id=user.id).all()
+    plan_favs = FavoritePlanet.query.filter_by(user_id=user.id).all()
     
     return jsonify({
-        "characters": [f.serialize() for f in char_favs],
-        "planets": [f.serialize() for f in plan_favs]
+        "user_email": user.email,
+        "favorite_people": [f.serialize() for f in char_favs],
+        "favorite_planets": [f.serialize() for f in plan_favs]
     }), 200
 
-# --- ENDPOINTS DE FAVORITOS (POST & DELETE) ---
+# ENDPOINTS DE FAVORITOS (POST)
 
 @app.route('/favorite/planet/<int:planet_id>', methods=['POST'])
 def add_favorite_planet(planet_id):
-    user_id = 1 
-    exists = FavoritePlanet.query.filter_by(user_id=user_id, planet_id=planet_id).first()
-    if exists:
-        return jsonify({"msg": "Ya es favorito"}), 400
-    
-    new_fav = FavoritePlanet(user_id=user_id, planet_id=planet_id)
+    user = User.query.first() 
+    if not user: return jsonify({"msg": "Usuario no encontrado"}), 404
+    planet = Planet.query.get(planet_id)
+    if not planet: return jsonify({"msg": "El planeta no existe"}), 404
+    new_fav = FavoritePlanet(user_id=user.id, planet_id=planet_id)
     db.session.add(new_fav)
     db.session.commit()
-    return jsonify({"msg": "Planeta añadido a favoritos"}), 201
+    return jsonify({"msg": f"Planeta {planet.name} añadido a favoritos de {user.email}"}), 201
 
 @app.route('/favorite/people/<int:people_id>', methods=['POST'])
 def add_favorite_people(people_id):
-    user_id = 1
-    exists = FavoriteCharacter.query.filter_by(user_id=user_id, character_id=people_id).first()
-    if exists:
-        return jsonify({"msg": "Ya es favorito"}), 400
+    user = User.query.first() 
+    if not user: return jsonify({"msg": "Usuario no encontrado"}), 404
+    
+    person = Character.query.get(people_id)
+    if not person: return jsonify({"msg": "El personaje no existe"}), 404
 
-    new_fav = FavoriteCharacter(user_id=user_id, character_id=people_id)
+    new_fav = FavoriteCharacter(user_id=user.id, character_id=people_id)
     db.session.add(new_fav)
     db.session.commit()
-    return jsonify({"msg": "Personaje añadido a favoritos"}), 201
+    return jsonify({"msg": f"Personaje {person.name} añadido a favoritos de {user.email}"}), 201
+
+# ENDPOINTS DE FAVORITOS (DELETE)
 
 @app.route('/favorite/planet/<int:planet_id>', methods=['DELETE'])
 def delete_favorite_planet(planet_id):
-    user_id = 1
-    fav = FavoritePlanet.query.filter_by(user_id=user_id, planet_id=planet_id).first()
-    if fav is None:
+    user = User.query.first() 
+    fav = FavoritePlanet.query.filter_by(user_id=user.id, planet_id=planet_id).first()
+    
+    if not fav:
         return jsonify({"msg": "Favorito no encontrado"}), 404
     
     db.session.delete(fav)
     db.session.commit()
-    return jsonify({"msg": "Favorito eliminado"}), 200
+    return jsonify({"msg": "Planeta eliminado de favoritos"}), 200
 
 @app.route('/favorite/people/<int:people_id>', methods=['DELETE'])
 def delete_favorite_people(people_id):
-    user_id = 1
-    fav = FavoriteCharacter.query.filter_by(user_id=user_id, character_id=people_id).first()
-    if fav is None:
+    user = User.query.first() 
+    fav = FavoriteCharacter.query.filter_by(user_id=user.id, character_id=people_id).first()
+    
+    if not fav:
         return jsonify({"msg": "Favorito no encontrado"}), 404
     
     db.session.delete(fav)
     db.session.commit()
-    return jsonify({"msg": "Favorito eliminado"}), 200
+    return jsonify({"msg": "Personaje eliminado de favoritos"}), 200
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
